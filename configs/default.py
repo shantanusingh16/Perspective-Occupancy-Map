@@ -4,8 +4,10 @@ from yacs.config import CfgNode as CN
 
 _C = CN()
 
+_C.name = 'perspective_occupancy_map'
+
 # Log configuration
-_C.log_dir = '/tmp/indoor_layout_estimation/'
+_C.log_dir = '/tmp/perspective_occupancy_map/'
 _C.log_frequency = 250
 _C.model_name = None
 _C.save_frequency = 1
