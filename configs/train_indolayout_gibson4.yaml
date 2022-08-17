@@ -1,0 +1,10 @@
+experiment_name: 'train_pbasictransformer_gibson4'
+project_name: 'indolayout'
+model_type: 'indolayout'
+data_dir: '/scratch/shantanu/gibson4/new'
+split_dir: 'splits/gibson4'
+log_dir: '/scratch/shantanu/indolayout/logs'
+weight_dir: '/scratch/shantanu/indolayout/weights'
+learning_rate: 1e-4
+batch_size: 16
+num_workers: 8

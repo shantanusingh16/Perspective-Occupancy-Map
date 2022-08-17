@@ -1,6 +1,7 @@
-import sys
+import os
+import time
 
-import cprint
+from cprint import cprint
 import argparse
 
 args = argparse.ArgumentParser()
@@ -15,10 +16,10 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning import seed_everything
 
-from torch.utils.data import DataLoader
+from datasets import make_datamodule
+from models import make_model
 
-from dataset import make_dataset
-from model import make_model
+from pytorch_lightning.profilers import AdvancedProfiler
 
 if __name__ == "__main__":
     
@@ -33,37 +34,44 @@ if __name__ == "__main__":
     cfg.freeze()
     cprint.info(cfg)
 
-    # Make Dataset
-    train_dataset = make_dataset(cfg, is_val=False)
-    val_dataset = make_dataset(cfg, is_val=True)
-
-    # Make dataloader
-    train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, 
-                            pin_memory=True, num_workers=cfg.num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False,
-                            pin_memory=True, num_workers=cfg.num_workers)
+    # Make datamodule
+    dm = make_datamodule(cfg)
+    cprint.warn(f"Datamodule {cfg.dataset} made")
 
     # Make model
-    device = torch.device("cpu" if cfg.no_cuda else "cuda")
-    model = make_model(cfg).to(device)
+    model = make_model(cfg)
+    cprint.warn(f"Model {cfg.model_type} made, running on " + ("cpu" if cfg.no_cuda else "gpu"))
 
-    cprint.warn("Model made, running on " + "cpu" if cfg.no_cuda else "gpu")
+    # Unique timstamp for logging:
+    ts = time.strftime("%Y%m%d-%H%M%S")
 
     # Prepare Logging
-    wandb_logger = WandbLogger(name=cfg.name, log_model=True)
-    wandb_logger.watch(model, log='all')
+    log_dir = os.path.join(cfg.log_dir, cfg.experiment_name, ts)
+    os.makedirs(log_dir)
+    logger = WandbLogger(name=cfg.experiment_name, project=cfg.project_name, save_dir=log_dir, log_model=True)
+    logger.watch(model, log='all')
+
 
     # Prepare checkpointing and saving
+    weight_dir = os.path.join(cfg.weight_dir, cfg.experiment_name, ts)
+    os.makedirs(weight_dir)
     checkpoint_callback = ModelCheckpoint(
-        monitor='val_acc',
-        filename='model_name-{epoch:02d}-{val_acc:.2f}',
+        dirpath=weight_dir,
+        monitor='val_loss',
+        filename= cfg.experiment_name + '-{epoch:02d}-{val_loss:.2f}',
         save_top_k=3,
-        mode='max',
+        mode='min',
+        every_n_epochs=1
     )
 
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
+    # aprofiler = AdvancedProfiler(filename='perf_logs')
+
     # Train!
-    trainer = pl.Trainer(gpus=1, logger=wandb_logger, log_every_n_steps=1,
-            callbacks=[checkpoint_callback, lr_monitor], check_val_every_n_epoch=3, max_epochs=30)
-    trainer.fit(model, train_loader, val_loader)
+    trainer = pl.Trainer(accelerator='gpu', devices=[0,1], logger=logger, log_every_n_steps=cfg.log_frequency,
+            callbacks=[checkpoint_callback, lr_monitor], check_val_every_n_epoch=1, max_epochs=cfg.num_epochs, strategy='ddp')
+    trainer.fit(model, dm)
+
+    # Test!
+    trainer.test(model, dm)

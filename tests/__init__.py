@@ -23,8 +23,8 @@ class DataConfig(object):
         self.fname_metadata_map = {
             'RGB': ('.jpg', (1024, 1024, 3), 255), 
             'DEPTH': ('.png', (1024, 1024), 65535),
-            'semantics': ('.png', (1024, 1024), 258),
-            'pom': ('.png', (128, 128), 132),
+            'semantics': ('.png', (1024, 1024), 150),
+            'pom': ('.png', (128, 128), 2),
             'partial_occ': ('.png', (128, 128), 255),
         }
 

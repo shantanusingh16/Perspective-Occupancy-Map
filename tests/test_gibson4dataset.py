@@ -27,7 +27,7 @@ class TestGibson4Dataset(TestCase):
             rgb, sem, pom, bev = item
             self.assertEqual(tuple(rgb.shape), (3, *self.train_dataset.img_size))
             self.assertEqual(tuple(sem.shape), (1, *self.train_dataset.img_size))
-            self.assertEqual(tuple(pom.shape), (1, *self.train_dataset.img_size))
+            self.assertEqual(tuple(pom.shape), (1, *self.train_dataset.tgt_size))
             self.assertEqual(tuple(bev.shape), (1, *self.dataconfig.fname_metadata_map['partial_occ'][1]))
         
         for item in self.test_dataset:
@@ -35,7 +35,7 @@ class TestGibson4Dataset(TestCase):
             rgb, sem, pom, bev = item
             self.assertEqual(tuple(rgb.shape), (3, *self.test_dataset.img_size))
             self.assertEqual(tuple(sem.shape), (1, *self.test_dataset.img_size))
-            self.assertEqual(tuple(pom.shape), (1, *self.test_dataset.img_size))
+            self.assertEqual(tuple(pom.shape), (1, *self.test_dataset.tgt_size))
             self.assertEqual(tuple(bev.shape), (1, *self.dataconfig.fname_metadata_map['partial_occ'][1]))
 
     def test_colordiff_train(self):
