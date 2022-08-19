@@ -20,7 +20,7 @@ class SegOutLogger():
         for idx in range(0, X.shape[0], self.log_frequency):
             self.data.append((batch_idx + idx, X[idx], pred[idx], gt[idx]))  # (idx, rgb, pred, gt)
 
-    def flush(self):
+    def flush(self, stage):
         img_table = wandb.Table(columns=['ID', 'Image'])
         for item in self.data:
             mask_img = wandb.Image(item[1], masks = {
@@ -36,7 +36,7 @@ class SegOutLogger():
             
             img_table.add_data(item[0], mask_img)
 
-        self.logger.log({"Val. Segmentation Results" : img_table})
+        self.logger.log({f"{stage} segmentation results" : img_table})
         self.data = []
 
 
@@ -58,10 +58,10 @@ class GenOutLogger():
         for idx in range(0, X.shape[0], self.log_frequency):
             self.data.append((batch_idx + idx, X[idx], pred[idx], gt[idx]))  # (idx, rgb, pred, gt)
 
-    def flush(self):
+    def flush(self, stage):
         img_table = wandb.Table(columns=['ID', 'Input', 'Pred', 'GT'])
         for item in self.data:            
             img_table.add_data(item[0], wandb.Image(item[1]), wandb.Image(item[2]), wandb.Image(item[3]))
 
-        self.logger.log({"Val. Predictions" : img_table})
+        self.logger.log({f"{stage} predictions" : img_table})
         self.data = []

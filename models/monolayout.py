@@ -23,7 +23,7 @@ class Monolayout(pl.LightningModule):
         return y
 
     def training_step(self, batch, batch_idx):
-        rgb, _, pom, _ = batch
+        rgb, _, pom, _, _ = batch
         y_hat = self(rgb)
         loss = F.cross_entropy(y_hat, pom.squeeze().long())
         return loss

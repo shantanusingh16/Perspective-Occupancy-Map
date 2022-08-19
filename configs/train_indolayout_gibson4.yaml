@@ -1,4 +1,4 @@
-experiment_name: 'train_pbasictransformer_gibson4'
+experiment_name: 'train_MultiBlockTransformer_gibson4'
 project_name: 'indolayout'
 model_type: 'indolayout'
 data_dir: '/scratch/shantanu/gibson4/new'
@@ -8,3 +8,11 @@ weight_dir: '/scratch/shantanu/indolayout/weights'
 learning_rate: 1e-4
 batch_size: 16
 num_workers: 8
+num_epochs: 100
+
+model_hparams:
+  nblocks: 2
+  nheads: 4
+  head_dim: 32
+  ff_skipcon: True
+  dropout: 0.3

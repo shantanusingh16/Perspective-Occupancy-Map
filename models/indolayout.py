@@ -45,16 +45,16 @@ class P_BasicTransformer(nn.Module):
 #################################### Transformer Multiblock ###################################
 
 class MultiBlockTransformer(nn.Module):
-    def __init__(self, nblocks=1):
+    def __init__(self, nblocks=1, nheads=4, head_dim=32, ff_skipcon=True, dropout=0.3, **kwargs):
         super(MultiBlockTransformer, self).__init__()
 
         self.pos_emb1D = torch.nn.Parameter(torch.randn(1, 128, 64), requires_grad=True)
 
-        self.encoder = Encoder(18, 512, 512, True)
+        self.encoder = Encoder(18, 512, 512, True, last_pool=False)  # B x 128 x H/64 x W/64
         blocks = []
         for _ in range(nblocks):
-            blocks.append(MultiheadAttention(None, 128, 4, 32, dropout=0.3)),
-            blocks.append(FeedForward(64, 64, skip_conn=True, dropout=0.3)
+            blocks.append(MultiheadAttention(128, nheads, head_dim, dropout=dropout)),
+            blocks.append(FeedForward(64, 64, skip_conn=ff_skipcon, dropout=dropout)
         )
         self.transformer = nn.Sequential(*blocks)
         self.decoder = Decoder(num_ch_enc=128, num_class=3, occ_map_size=64)
@@ -84,20 +84,20 @@ class MultiBlockTransformer(nn.Module):
 
 
 class Indolayout(pl.LightningModule):
-    def __init__(self, learning_rate):
+    def __init__(self, learning_rate, *args, **kwargs):
         super().__init__()
-        self.model = P_BasicTransformer()
+        self.model = MultiBlockTransformer(**kwargs)
         self.learning_rate = learning_rate
 
         self.save_hyperparameters()
 
     def setup(self, stage= None) -> None:
-        if stage == 'fit' or stage is None:
-            self.val_metrics = torchmetrics.MetricCollection([torchmetrics.JaccardIndex(3, average=None), \
+        if (stage == 'fit') or (stage == 'test') or (stage is None):
+            self.eval_metrics = torchmetrics.MetricCollection([torchmetrics.JaccardIndex(3, average=None), \
                 torchmetrics.AveragePrecision(3, average=None)])
 
             ## TODO: Change hard-coded image log frequency to read from config
-            self.val_img_logger = logging.get_genout_logger(self.logger.experiment)
+            self.eval_img_logger = logging.get_genout_logger(self.logger.experiment)
 
 
     def forward(self, x):
@@ -105,47 +105,49 @@ class Indolayout(pl.LightningModule):
         return y_hat
 
     def training_step(self, batch, batch_idx):
-        rgb, _, _, bev = batch
+        rgb, _, _, bev, _ = batch
         y_hat = self(rgb)
-        y_gt = bev[:,64:,32:96]
+        y_gt = bev[:,:,64:,32:96]
         loss = F.cross_entropy(y_hat, y_gt)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        y_hat = self._shared_eval(batch, batch_idx, "val")
-        
-        y_gt = batch[3][:,64:,32:96]
-        rgb = batch[0]
-
-        self.val_metrics.update(y_hat, y_gt)
-
-        y_hat = torch.argmax(y_hat, dim=1).to(torch.uint8) * 127
-        y_gt = y_gt.to(torch.uint8) * 127
-        self.val_img_logger.log_image(X=rgb, pred=y_hat, gt=y_gt, batch_idx=batch_idx)
-       
-
-    def on_validation_epoch_end(self) -> None:
-        self.val_img_logger.flush()
-
-        iu, ap =  self.val_metrics.compute().values()
-        self.log('mIOU', {'unknown': iu[0], 'occupied': iu[1], 'free': iu[2]}, sync_dist=True)
-        self.log('mAP', {'unknown': ap[0], 'occupied': ap[1], 'free': ap[2]}, sync_dist=True)
-
-        self.val_metrics.reset()
+        self._shared_eval(batch, batch_idx, "val")
 
     def test_step(self, batch, batch_idx):
         self._shared_eval(batch, batch_idx, "test")
 
     def _shared_eval(self, batch, batch_idx, prefix):
-        rgb, _, _, bev = batch
+        rgb, _, _, bev, _ = batch
         y_hat = self(rgb)
-        y_gt = bev[:,64:,32:96]
+        y_gt = bev[:,:,64:,32:96]
         loss = F.cross_entropy(y_hat, y_gt)
         self.log(f"{prefix}_loss", loss, sync_dist=True)
-        return y_hat
+
+        y_gt = torch.argmax(y_gt, dim=1)
+        self.eval_metrics.update(y_hat, y_gt)
+
+        y_hat = torch.argmax(y_hat, dim=1).to(torch.uint8) * 127
+        y_gt = y_gt.to(torch.uint8) * 127
+        self.eval_img_logger.log_image(X=rgb, pred=y_hat, gt=y_gt, batch_idx=batch_idx)
+       
+    def on_validation_epoch_end(self) -> None:
+        self.log_metrics_and_outputs(stage='val')
+
+    def on_test_epoch_end(self) -> None:
+        self.log_metrics_and_outputs(stage='test')
+
+    def log_metrics_and_outputs(self, stage):
+        self.eval_img_logger.flush(stage)
+
+        iu, ap =  self.eval_metrics.compute().values()
+        self.log(f'{stage}/mIOU', {'unknown': iu[0], 'occupied': iu[1], 'free': iu[2]}, sync_dist=True)
+        self.log(f'{stage}/mAP', {'unknown': ap[0], 'occupied': ap[1], 'free': ap[2]}, sync_dist=True)
+
+        self.eval_metrics.reset()
 
     def predict_step(self, batch, batch_idx: int, dataloader_idx: int = 0):
-        rgb, _, _, _ = batch
+        rgb, _, _, _, _ = batch
         y_hat = self(rgb)
         return torch.argmax(y_hat, dim=1)
 
@@ -158,6 +160,8 @@ if __name__ == "__main__":
     model = Indolayout(learning_rate=1e-4)
 
     input_rgb = torch.rand((4, 3, 512, 512))
-    lbl = torch.randint(3, size=((4, 128, 128))).long()
-    loss = model.training_step((input_rgb, None, None, lbl), 0)
+    bev = torch.randint(2, size=((4, 3, 128, 128))).float()
+    print(bev.unique())
+
+    loss = model.training_step((input_rgb, None, None, bev, None), 0)
     print(loss)

@@ -3,7 +3,8 @@ from typing import List
 import torch
 from torch.utils.data import Dataset
 import pytorch_lightning as pl
-from torch.utils.data import random_split, DataLoader
+from torch.utils.data import DataLoader
+from utils.helper import to_onehot_tensor
 from PIL import Image
 import torchvision.transforms as transforms
 import numpy as np
@@ -45,12 +46,20 @@ class Gibson4Dataset(Dataset):
         ])
 
         self.lbl_transforms = transforms.Compose([
+            transforms.ToPILImage(),
             transforms.Resize(self.tgt_size, interpolation=transforms.InterpolationMode.NEAREST),
             transforms.ToTensor()
         ])
 
     def __len__(self):
         return len(self.files)
+
+    def discard_map_semantics(self, sem_map):
+        # Convert semantic perspective occupancy map to simple occupancy map
+        map = np.zeros_like(sem_map, dtype=int)
+        map[sem_map != 0] = 1
+        map[np.isin(sem_map, [4, 29])] = 2
+        return torch.from_numpy(map)
 
     def __getitem__(self, index):
         scene, camera, fileidx = self.files[index].split()
@@ -63,26 +72,26 @@ class Gibson4Dataset(Dataset):
 
         sem_pom_path = os.path.join(self.data_dir, scene, '0', camera, 'pom', f'{fileidx}.png')
         sem_pom = np.array(Image.open(sem_pom_path))
-
-        # Convert semantic perspective occupancy map to simple occupancy map
-        pom = np.zeros_like(sem_pom)
-        pom[sem_pom != 0] = 1
-        pom[np.isin(sem_pom, [4, 29])] = 2
-        pom = self.lbl_transforms(Image.fromarray(pom))   
+        pom = self.discard_map_semantics(sem_pom)
+        pom = self.lbl_transforms(pom.float()).long()
 
         bev_path = os.path.join(self.data_dir, scene, '0', camera, 'partial_occ', f'{fileidx}.png')
-        bev = torch.from_numpy(np.array(Image.open(bev_path), dtype=int) // 127)
+        bev = np.array(Image.open(bev_path), dtype=int) // 127
+        bev = to_onehot_tensor(bev, 3)
 
-        return rgb, sem, pom, bev
+        sem_projbev_path = os.path.join(self.data_dir, scene, '0', camera, 'proj_bev', f'{fileidx}.png')
+        sem_projbev = np.array(Image.open(sem_projbev_path))
+        projbev = to_onehot_tensor(self.discard_map_semantics(sem_projbev), 3)
+
+        return rgb, sem, pom, bev, projbev
 
 
 
 class Gibson4DataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str, split_dir: str, train_val_split: float = 0.9, batch_size: int = 32, num_workers: int=0):
+    def __init__(self, data_dir: str, split_dir: str, batch_size: int = 32, num_workers: int=0):
         super().__init__()
         self.data_dir = data_dir
         self.split_dir = split_dir
-        self.train_val_split = train_val_split
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.save_hyperparameters()
@@ -90,17 +99,14 @@ class Gibson4DataModule(pl.LightningDataModule):
     def setup(self, stage=None):
         with open(os.path.join(self.split_dir, 'train.txt'), 'r') as f:
             train_files = f.read().splitlines()
+        with open(os.path.join(self.split_dir, 'val.txt'), 'r') as f:
+            val_files = f.read().splitlines()
         with open(os.path.join(self.split_dir, 'test.txt'), 'r') as f:
             test_files = f.read().splitlines()
 
         if stage == 'fit' or stage is None:
-            dataset = Gibson4Dataset(self.data_dir, train_files, train=True)
-            train_size = int(len(dataset) * self.train_val_split)
-            val_size = len(dataset) - train_size
-
-            gibson4_train, gibson4_val = random_split(dataset, [train_size, val_size])
-            self.gibson4_train = gibson4_train
-            self.gibson4_val = gibson4_val
+            self.gibson4_train = Gibson4Dataset(self.data_dir, train_files, train=True)
+            self.gibson4_val = Gibson4Dataset(self.data_dir, val_files, train=True)
 
         if stage == 'test' or stage == 'predict' or stage is None:
             self.gibson4_test = Gibson4Dataset(self.data_dir, test_files)

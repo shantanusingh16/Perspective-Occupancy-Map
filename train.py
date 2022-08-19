@@ -1,12 +1,9 @@
 import os
 import time
 
+import wandb
 from cprint import cprint
 import argparse
-
-args = argparse.ArgumentParser()
-args.add_argument("--config_path", help="Path to Config File", default="configs/example_config.yaml")
-args = args.parse_args()
 
 from configs import get_cfg_defaults
 
@@ -21,19 +18,8 @@ from models import make_model
 
 from pytorch_lightning.profilers import AdvancedProfiler
 
-if __name__ == "__main__":
-    
-    # Load config file
-    cfg = get_cfg_defaults()
 
-    if args.config_path[-4:] == 'yaml':
-        cfg.merge_from_file(args.config_path)
-    else:
-        print("No valid config specified, using default")
-
-    cfg.freeze()
-    cprint.info(cfg)
-
+def main(cfg):
     # Make datamodule
     dm = make_datamodule(cfg)
     cprint.warn(f"Datamodule {cfg.dataset} made")
@@ -48,7 +34,7 @@ if __name__ == "__main__":
     # Prepare Logging
     log_dir = os.path.join(cfg.log_dir, cfg.experiment_name, ts)
     os.makedirs(log_dir)
-    logger = WandbLogger(name=cfg.experiment_name, project=cfg.project_name, save_dir=log_dir, log_model=True)
+    logger = WandbLogger(save_dir=log_dir, log_model=cfg.log_model_checkpoint)
     logger.watch(model, log='all')
 
 
@@ -75,3 +61,32 @@ if __name__ == "__main__":
 
     # Test!
     trainer.test(model, dm)
+
+
+if __name__ == "__main__":
+
+    args = argparse.ArgumentParser()
+    args.add_argument("--experiment_name", help="experiment name", required=False, default="")
+    args.add_argument("--config_path", help="Path to Config File", required=False, default="")
+    args, _ = args.parse_known_args()
+    
+    # Load config file
+    cfg = get_cfg_defaults()
+
+    if os.path.exists(args.config_path) and os.path.splitext(args.config_path)[1] == '.yaml':
+        cfg.merge_from_file(args.config_path)
+    else:
+        print("No valid config specified, using default")
+
+    if args.experiment_name != "":
+        cfg.update({'experiment_name': args.experiment_name}, allow_val_change=True)
+
+    wandb.init(config=cfg, name=cfg.experiment_name, project=cfg.project_name)
+    cfg = wandb.config
+
+    if cfg.experiment_name == "":
+        cfg.update({'experiment_name': wandb.run.name}, allow_val_change=True)
+    
+    cprint.info(cfg)
+
+    main(cfg)

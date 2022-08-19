@@ -9,12 +9,13 @@ _C.project_name = 'perspective_occupancy_map'
 
 
 # Log configuration
-_C.experiment_name = None
+_C.experiment_name = ""
 _C.log_dir = '/tmp/perspective_occupancy_map/logs'
 _C.weight_dir = '/tmp/perspective_occupancy_map/weights'
 _C.log_frequency = 250
 _C.model_type = None
 _C.save_frequency = 1
+_C.log_model_checkpoint = True  # For wandb
 _C.script_mode = 'train'  # train, eval, predict
 
 # Dataset configuration
@@ -25,12 +26,12 @@ _C.width = 128
 _C.height = 128
 
 # Model configuration
-_C.load_weights_folder = None
+_C.load_ckpt_path = None
+_C.model_hparams = CN(new_allowed=True)   # To allow model specific params
 
 # Training hyperparameters
 _C.no_cuda = False
 _C.batch_size = 4
-_C.train_val_split = 0.9
 _C.num_epochs = 100
 _C.num_workers = 4
 _C.learning_rate = 1e-4

@@ -2,8 +2,7 @@ import torch
 import pytorch_lightning as pl
 import torch.nn.functional as F
 from utils import logging 
-from torchvision.transforms import Resize, Normalize, Compose, InterpolationMode
-from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large
+from models.encoder_decoder import UNetEncoder, UNetDecoder
 import torchmetrics
 
 '''
@@ -12,13 +11,11 @@ https://pytorch.org/vision/stable/models/generated/torchvision.models.segmentati
 '''
 
 
-class DeepLabv3(pl.LightningModule):
+class AmodalBev(pl.LightningModule):
     def __init__(self, learning_rate, *args, **kwargs):
         super().__init__()
-        self.model = deeplabv3_mobilenet_v3_large(weights=None, num_classes=3)
-        self.model_transforms = Compose([Resize(520), Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))])
-        #TODO: Fix hardcoded outputsize
-        self.output_transform = Resize((128, 128), interpolation=InterpolationMode.NEAREST)
+        self.encoder = UNetEncoder(3, 16)
+        self.decoder = UNetDecoder(3, 16)
         self.learning_rate = learning_rate
 
         self.save_hyperparameters()
@@ -29,18 +26,19 @@ class DeepLabv3(pl.LightningModule):
                 torchmetrics.AveragePrecision(3, average=None)])
 
             ## TODO: Change hard-coded image log frequency to read from config
-            self.eval_img_logger = logging.get_segout_logger(self.logger.experiment)
+            self.eval_img_logger = logging.get_genout_logger(self.logger.experiment)
+
 
     def forward(self, x):
-        x = self.model_transforms(x)
-        y_hat = self.model(x)['out']
-        y_hat = self.output_transform(y_hat)
+        z_hat = self.encoder(x)
+        y_hat = self.decoder(z_hat)
         return y_hat
 
     def training_step(self, batch, batch_idx):
-        rgb, _, pom, _, _ = batch
-        y_hat = self(rgb)
-        loss = F.cross_entropy(y_hat, pom.squeeze().long())
+        _, _, _, bev, proj_bev = batch
+        y_hat = self(proj_bev)
+        y_gt = bev[:,:,64:,32:96]
+        loss = F.cross_entropy(y_hat, y_gt)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -50,21 +48,20 @@ class DeepLabv3(pl.LightningModule):
         self._shared_eval(batch, batch_idx, "test")
 
     def _shared_eval(self, batch, batch_idx, prefix):
-        rgb, _, pom, _, _ = batch
-
-        y_hat = self(rgb)
-        y_gt = pom.squeeze().long()
-
+        rgb, _, _, bev, projbev = batch
+        y_hat = self(projbev)
+        y_gt = bev[:,:,64:,32:96]
         loss = F.cross_entropy(y_hat, y_gt)
         self.log(f"{prefix}_loss", loss, sync_dist=True)
 
+        y_gt = torch.argmax(y_gt, dim=1)
         self.eval_metrics.update(y_hat, y_gt)
 
         y_hat = torch.argmax(y_hat, dim=1).to(torch.uint8) * 127
         y_gt = y_gt.to(torch.uint8) * 127
 
         self.eval_img_logger.log_image(X=rgb, pred=y_hat, gt=y_gt, batch_idx=batch_idx)
-
+       
     def on_validation_epoch_end(self) -> None:
         self.log_metrics_and_outputs(stage='val')
 
@@ -80,12 +77,9 @@ class DeepLabv3(pl.LightningModule):
 
         self.eval_metrics.reset()
 
-    def test_step(self, batch, batch_idx):
-        self._shared_eval(batch, batch_idx, "test")
-
     def predict_step(self, batch, batch_idx: int, dataloader_idx: int = 0):
-        rgb, _, _, _, _ = batch
-        y_hat = self(rgb)
+        _, _, _, _, projbev = batch
+        y_hat = self(projbev)
         return torch.argmax(y_hat, dim=1)
 
     def configure_optimizers(self):
@@ -94,8 +88,13 @@ class DeepLabv3(pl.LightningModule):
 
 
 if __name__ == "__main__":
-    model = DeepLabv3()
+    model = AmodalBev(1e-4)
 
     input_rgb = torch.rand((4, 3, 512, 512))
-    lbl = torch.randint(3, size=((4, 1, 128, 128))).long()
-    model.training_step((input_rgb, None, lbl, None), 0)
+    bev = torch.randint(1, size=((4, 3, 128, 128))).float()
+    projbev = torch.randint(1, size=((4, 3, 64, 64))).float()
+
+    print(bev.unique(), projbev.unique())
+
+    loss = model.training_step((input_rgb, None, None, bev, projbev), 0)
+    print(loss)

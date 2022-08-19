@@ -1,0 +1,63 @@
+program: train.py
+method: bayes
+metric:
+  name: val_loss
+  goal: minimize
+parameters:
+  project_name:
+    distribution: constant
+    value: 'indolayout'
+  model_type:
+    distribution: constant
+    value: 'indolayout'
+  data_dir:
+    distribution: constant
+    value: '/scratch/shantanu/gibson4/new'
+  num_epochs:
+    distribution: constant
+    value: 30
+  split_dir:
+    distribution: constant
+    value: 'splits/gibson4'
+  log_dir:
+    distribution: constant
+    value: '/scratch/shantanu/indolayout-sweep/logs'
+  weight_dir:
+    distribution: constant
+    value: '/scratch/shantanu/indolayout-sweep/weights'
+  num_workers:
+    distribution: constant
+    value: 8
+  log_model_checkpoint:
+    distribution: constant
+    value: False
+
+  batch_size:
+    distribution: categorical
+    values: [8, 12, 16]
+  learning_rate:
+    distribution: log_uniform_values
+    min: 1e-6
+    max: 1e-1
+  model_hparams.nblocks:
+    distribution: int_uniform
+    min: 1
+    max: 6
+  model_hparams.nheads:
+    distribution: int_uniform
+    min: 1
+    max: 4
+  model_hparams.head_dim:
+    distribution: categorical
+    values: [32, 64, 128]
+  model_hparams.ff_skipcon:
+    distribution: categorical
+    values: [True, False]
+  model_hparams.dropout:
+    distribution: uniform
+    min: 0
+    max: 0.6
+early_terminate:
+  type: hyperband
+  min_iter: 3
+  eta: 2
