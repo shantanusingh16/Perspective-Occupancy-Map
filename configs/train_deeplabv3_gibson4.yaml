@@ -7,3 +7,6 @@ weight_dir: '/scratch/shantanu/perspective_occupancy_map/weights'
 learning_rate: 1e-4
 batch_size: 16
 num_workers: 8
+
+model_hparams:
+  num_classes: 3

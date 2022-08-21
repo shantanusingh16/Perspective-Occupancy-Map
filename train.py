@@ -7,6 +7,7 @@ import argparse
 
 from configs import get_cfg_defaults
 
+import torch
 import pytorch_lightning as pl
 
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -17,6 +18,8 @@ from datasets import make_datamodule
 from models import make_model
 
 from pytorch_lightning.profilers import AdvancedProfiler
+
+from utils.logging import init_logger
 
 
 def main(cfg):
@@ -34,7 +37,7 @@ def main(cfg):
     # Prepare Logging
     log_dir = os.path.join(cfg.log_dir, cfg.experiment_name, ts)
     os.makedirs(log_dir)
-    logger = WandbLogger(save_dir=log_dir, log_model=cfg.log_model_checkpoint)
+    logger = WandbLogger(name=cfg.experiment_name, project=cfg.project_name, save_dir=log_dir, log_model=cfg.log_model_checkpoint)
     logger.watch(model, log='all')
 
 
@@ -55,7 +58,7 @@ def main(cfg):
     # aprofiler = AdvancedProfiler(filename='perf_logs')
 
     # Train!
-    trainer = pl.Trainer(accelerator='gpu', devices=[0,1], logger=logger, log_every_n_steps=cfg.log_frequency,
+    trainer = pl.Trainer(accelerator='gpu', devices=torch.cuda.device_count(), logger=logger, log_every_n_steps=cfg.log_frequency,
             callbacks=[checkpoint_callback, lr_monitor], check_val_every_n_epoch=1, max_epochs=cfg.num_epochs, strategy='ddp')
     trainer.fit(model, dm)
 
@@ -80,13 +83,8 @@ if __name__ == "__main__":
 
     if args.experiment_name != "":
         cfg.update({'experiment_name': args.experiment_name}, allow_val_change=True)
-
-    wandb.init(config=cfg, name=cfg.experiment_name, project=cfg.project_name)
-    cfg = wandb.config
-
-    if cfg.experiment_name == "":
-        cfg.update({'experiment_name': wandb.run.name}, allow_val_change=True)
     
+    cfg = init_logger('wandb', cfg)
     cprint.info(cfg)
 
     main(cfg)

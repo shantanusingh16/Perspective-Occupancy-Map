@@ -27,7 +27,7 @@ class TestGibson4Dataset(TestCase):
             rgb, sem, pom, bev, proj_bev = item
             self.assertEqual(tuple(rgb.shape), (3, *self.train_dataset.img_size))
             self.assertEqual(tuple(sem.shape), (1, *self.train_dataset.img_size))
-            self.assertEqual(tuple(pom.shape), (1, *self.train_dataset.tgt_size))
+            self.assertEqual(tuple(pom.shape), (3, *self.train_dataset.tgt_size))
             self.assertEqual(tuple(bev.shape), (3, *self.dataconfig.fname_metadata_map['partial_occ'][1]))
             self.assertEqual(tuple(proj_bev.shape), (3, *self.dataconfig.fname_metadata_map['proj_bev'][1]))
         
@@ -36,7 +36,7 @@ class TestGibson4Dataset(TestCase):
             rgb, sem, pom, bev, proj_bev = item
             self.assertEqual(tuple(rgb.shape), (3, *self.test_dataset.img_size))
             self.assertEqual(tuple(sem.shape), (1, *self.test_dataset.img_size))
-            self.assertEqual(tuple(pom.shape), (1, *self.test_dataset.tgt_size))
+            self.assertEqual(tuple(pom.shape), (3, *self.test_dataset.tgt_size))
             self.assertEqual(tuple(bev.shape), (3, *self.dataconfig.fname_metadata_map['partial_occ'][1]))
             self.assertEqual(tuple(proj_bev.shape), (3, *self.dataconfig.fname_metadata_map['proj_bev'][1]))
 

@@ -13,9 +13,10 @@ https://pytorch.org/vision/stable/models/generated/torchvision.models.segmentati
 
 
 class DeepLabv3(pl.LightningModule):
-    def __init__(self, learning_rate, *args, **kwargs):
+    def __init__(self, learning_rate, num_classes, *args, **kwargs):
         super().__init__()
-        self.model = deeplabv3_mobilenet_v3_large(weights=None, num_classes=3)
+        self.num_classes = num_classes
+        self.model = deeplabv3_mobilenet_v3_large(weights=None, num_classes=num_classes)
         self.model_transforms = Compose([Resize(520), Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))])
         #TODO: Fix hardcoded outputsize
         self.output_transform = Resize((128, 128), interpolation=InterpolationMode.NEAREST)
@@ -40,7 +41,8 @@ class DeepLabv3(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         rgb, _, pom, _, _ = batch
         y_hat = self(rgb)
-        loss = F.cross_entropy(y_hat, pom.squeeze().long())
+        y_gt = pom
+        loss = F.cross_entropy(y_hat, y_gt)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -53,15 +55,16 @@ class DeepLabv3(pl.LightningModule):
         rgb, _, pom, _, _ = batch
 
         y_hat = self(rgb)
-        y_gt = pom.squeeze().long()
+        y_gt = pom
 
         loss = F.cross_entropy(y_hat, y_gt)
         self.log(f"{prefix}_loss", loss, sync_dist=True)
 
+        y_gt = torch.argmax(y_gt, dim=1)
         self.eval_metrics.update(y_hat, y_gt)
 
-        y_hat = torch.argmax(y_hat, dim=1).to(torch.uint8) * 127
-        y_gt = y_gt.to(torch.uint8) * 127
+        y_hat = torch.argmax(y_hat, dim=1).to(torch.uint8) * (255 // (self.num_classes - 1))
+        y_gt = y_gt.to(torch.uint8) * (255 // (self.num_classes - 1))
 
         self.eval_img_logger.log_image(X=rgb, pred=y_hat, gt=y_gt, batch_idx=batch_idx)
 
@@ -80,9 +83,6 @@ class DeepLabv3(pl.LightningModule):
 
         self.eval_metrics.reset()
 
-    def test_step(self, batch, batch_idx):
-        self._shared_eval(batch, batch_idx, "test")
-
     def predict_step(self, batch, batch_idx: int, dataloader_idx: int = 0):
         rgb, _, _, _, _ = batch
         y_hat = self(rgb)
@@ -94,8 +94,8 @@ class DeepLabv3(pl.LightningModule):
 
 
 if __name__ == "__main__":
-    model = DeepLabv3()
+    model = DeepLabv3(learning_rate=1e-3)
 
     input_rgb = torch.rand((4, 3, 512, 512))
     lbl = torch.randint(3, size=((4, 1, 128, 128))).long()
-    model.training_step((input_rgb, None, lbl, None), 0)
+    model.training_step((input_rgb, None, lbl, None, None), 0)

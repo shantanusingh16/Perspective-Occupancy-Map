@@ -1,6 +1,18 @@
 import wandb
 import torch
-from torchvision.transforms.functional import resize   
+from torchvision.transforms.functional import resize  
+from pytorch_lightning.utilities.rank_zero import rank_zero_only
+
+def init_only_once(cfg):
+    if rank_zero_only.rank != 0:
+        return cfg
+        
+    wandb.init(config=cfg, name=cfg.experiment_name, project=cfg.project_name)
+    cfg = wandb.config
+
+    if cfg.experiment_name == "":
+        cfg.update({'experiment_name': wandb.run.name}, allow_val_change=True)
+    return cfg
 
 
 class SegOutLogger():
@@ -12,7 +24,7 @@ class SegOutLogger():
         self.max_count = max_count
 
     def log_image(self, X, pred, gt, batch_idx):
-        pred = torch.argmax(pred, dim=1).cpu().detach().numpy()   # (B,C,H,W) -> (B,H,W)
+        pred = pred.cpu().detach().numpy()   # (B,C,H,W) -> (B,H,W)
         gt = gt.cpu().detach().numpy()
 
         X = resize(X.cpu().detach(), pred[0].shape) # Resize input to shape of pred
@@ -26,11 +38,11 @@ class SegOutLogger():
             mask_img = wandb.Image(item[1], masks = {
                 "prediction" : {
                     "mask_data" : item[2],
-                    "class_labels" : {0: 'unknown', 1:'occupied', 2:'free'}
+                    # "class_labels" : {0: 'unknown', 1:'occupied', 2:'free'}
                 },
                 "ground_truth": {
                     "mask_data" : item[3],
-                    "class_labels" : {0: 'unknown', 1:'occupied', 2:'free'}
+                    # "class_labels" : {0: 'unknown', 1:'occupied', 2:'free'}
                 },
             })
             
@@ -50,7 +62,7 @@ class GenOutLogger():
         self.max_count = max_count
 
     def log_image(self, X, pred, gt, batch_idx):
-        pred = pred.cpu().detach().numpy()   # (B,C,H,W) -> (B,H,W)
+        pred = pred.cpu().detach().numpy()
         gt = gt.cpu().detach().numpy()
 
         X = resize(X.cpu().detach(), pred[0].shape) # Resize input to shape of pred

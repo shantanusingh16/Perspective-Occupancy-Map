@@ -46,9 +46,7 @@ class Gibson4Dataset(Dataset):
         ])
 
         self.lbl_transforms = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize(self.tgt_size, interpolation=transforms.InterpolationMode.NEAREST),
-            transforms.ToTensor()
+            transforms.Resize(self.tgt_size, interpolation=transforms.InterpolationMode.NEAREST)
         ])
 
     def __len__(self):
@@ -56,6 +54,7 @@ class Gibson4Dataset(Dataset):
 
     def discard_map_semantics(self, sem_map):
         # Convert semantic perspective occupancy map to simple occupancy map
+        sem_map = np.array(sem_map)
         map = np.zeros_like(sem_map, dtype=int)
         map[sem_map != 0] = 1
         map[np.isin(sem_map, [4, 29])] = 2
@@ -71,9 +70,9 @@ class Gibson4Dataset(Dataset):
         sem = self.semantics_transforms(Image.open(sem_path))
 
         sem_pom_path = os.path.join(self.data_dir, scene, '0', camera, 'pom', f'{fileidx}.png')
-        sem_pom = np.array(Image.open(sem_pom_path))
+        sem_pom = self.lbl_transforms(Image.open(sem_pom_path))
         pom = self.discard_map_semantics(sem_pom)
-        pom = self.lbl_transforms(pom.float()).long()
+        pom = to_onehot_tensor(pom, 3)
 
         bev_path = os.path.join(self.data_dir, scene, '0', camera, 'partial_occ', f'{fileidx}.png')
         bev = np.array(Image.open(bev_path), dtype=int) // 127

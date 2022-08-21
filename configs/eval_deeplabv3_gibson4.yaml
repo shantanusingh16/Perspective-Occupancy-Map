@@ -1,0 +1,12 @@
+experiment_name: 'eval_deeplabv3_gibson4'
+project_name: 'perspective_occupancy_map'
+model_type: 'deeplabv3'
+data_dir: '/scratch/shantanu/gibson4/new'
+split_dir: 'splits/gibson4'
+log_dir: '/scratch/shantanu/perspective_occupancy_map/logs'
+load_ckpt_path: '/scratch/shantanu/perspective_occupancy_map/weights/train_deeplabv3_gibson4/20220821-193426/train_deeplabv3_gibson4-epoch=06-val_loss=0.07.ckpt'
+learning_rate: 1e-4
+batch_size: 16
+num_workers: 8
+model_hparams:
+  num_classes: 3

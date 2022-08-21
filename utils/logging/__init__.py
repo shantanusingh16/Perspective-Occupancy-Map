@@ -14,6 +14,13 @@ class DummyLogger():
         return lambda *args, **kwargs: None
 
 
+def init_logger(logger_type:str, cfg):
+    if logger_type == 'wandb':
+        return lwandb.init_only_once(cfg)
+
+    raise NotImplementedError(f'{logger_type} logger not handled.')
+
+
 def get_segout_logger(logger):
     '''
     Function to get logging instance to log segmentation outputs.
