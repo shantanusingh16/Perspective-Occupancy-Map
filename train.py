@@ -38,7 +38,7 @@ def main(cfg):
     log_dir = os.path.join(cfg.log_dir, cfg.experiment_name, ts)
     os.makedirs(log_dir)
     logger = WandbLogger(name=cfg.experiment_name, project=cfg.project_name, save_dir=log_dir, log_model=cfg.log_model_checkpoint)
-    logger.watch(model, log='all')
+    # logger.watch(model, log='all')
 
 
     # Prepare checkpointing and saving
