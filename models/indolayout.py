@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-from models.multihead_attention import MultiheadAttention
-from models.feedforward import FeedForward
+from models.transformers import MHA2D, Transformer2D
 from models.encoder_decoder import Encoder, Decoder
 import pytorch_lightning as pl
 import torch.nn.functional as F
@@ -18,7 +17,7 @@ class P_BasicTransformer(nn.Module):
         self.pos_emb1D = torch.nn.Parameter(torch.randn(1, 128, 64), requires_grad=True)
 
         self.encoder = Encoder(18, 512, 512, True)
-        self.basic_transformer = MultiheadAttention(128, 4, 32)
+        self.basic_transformer = MHA2D(128, 4, 32)
         self.decoder = Decoder(num_ch_enc=128, num_class=3, occ_map_size=64)
 
         self.scores = None
@@ -45,21 +44,16 @@ class P_BasicTransformer(nn.Module):
 #################################### Transformer Multiblock ###################################
 
 class MultiBlockTransformer(nn.Module):
-    def __init__(self, nblocks=1, nheads=4, head_dim=32, ff_skipcon=True, dropout=0.3, **kwargs):
+    def __init__(self, nblocks=1, nheads=4, head_dim=32, mha_skipcon=True, ff_skipcon=True, ff_dim=64, dropout=0.3, **kwargs):
         super(MultiBlockTransformer, self).__init__()
 
         self.pos_emb1D = torch.nn.Parameter(torch.randn(1, 128, 64), requires_grad=True)
 
         self.encoder = Encoder(18, 512, 512, True, last_pool=False)  # B x 128 x H/64 x W/64
-        blocks = []
-        for _ in range(nblocks):
-            blocks.append(MultiheadAttention(128, nheads, head_dim, dropout=dropout)),
-            blocks.append(FeedForward(64, 64, skip_conn=ff_skipcon, dropout=dropout)
-        )
-        self.transformer = nn.Sequential(*blocks)
+        self.transformer = Transformer2D(nblocks, 128, nheads, head_dim, mha_skipcon, dropout, ff_dim, ff_skipcon)
         self.decoder = Decoder(num_ch_enc=128, num_class=3, occ_map_size=64)
 
-        self.ft_viz_layer = [blocks[-1]]
+        self.ft_viz_layer = []
         self.scores = []
         
     def get_attention_map(self):
@@ -152,7 +146,10 @@ class Indolayout(pl.LightningModule):
         return torch.argmax(y_hat, dim=1)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        opt = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        shd = torch.optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.1)
+
+        return {'optimizer':opt, 'lr_scheduler':shd, 'monitor': 'val_loss'}
 
 
 
@@ -160,8 +157,7 @@ if __name__ == "__main__":
     model = Indolayout(learning_rate=1e-4)
 
     input_rgb = torch.rand((4, 3, 512, 512))
-    bev = torch.randint(2, size=((4, 3, 128, 128))).float()
-    print(bev.unique())
+    bev = F.softmax(torch.rand((4, 3, 128, 128)), dim=1)
 
     loss = model.training_step((input_rgb, None, None, bev, None), 0)
     print(loss)

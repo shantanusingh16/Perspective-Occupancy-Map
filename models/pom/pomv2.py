@@ -6,14 +6,35 @@ from torchvision.transforms import Resize, Normalize, Compose, InterpolationMode
 from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large
 import torchmetrics
 from models.encoder_decoder import UNetEncoder, UNetDecoder
-
-'''
-URLs:
-https://pytorch.org/vision/stable/models/generated/torchvision.models.segmentation.deeplabv3_resnet101.html#torchvision.models.segmentation.DeepLabV3_ResNet101_Weights
-'''
+from models.pon import PON
+from torchgeometry.losses import dice_loss
 
 
-class POMv1(pl.LightningModule):
+#################################### PON_mod Module ########################################
+class PON_mod(PON):
+    def __init__(self, learning_rate, num_classes, *args, **kwargs):
+        super().__init__(learning_rate, num_classes, *args, **kwargs)
+        del self.decoder  # Remove decoder
+        self.pon_encoder = UNetEncoder(64, 64)
+
+        self.save_hyperparameters()
+
+    def setup(self, stage= None) -> None:  # Remove setup of logging metrics and instances
+        pass
+
+    def forward(self, x):  # Return only bev features and filter
+        fts = self.encoder(x)
+        proj_fts = [self.dense_transformers[idx](fts[idx]) for idx in range(len(fts))]
+        bev_fts, bev_filter = self.cartesian_sample_bev(proj_fts)
+        bev_enc_fts = self.pon_encoder(bev_fts)
+        return bev_enc_fts, bev_filter
+
+
+
+
+#################################### POMv2 Module ########################################
+
+class POMv2(pl.LightningModule):
     def __init__(self, learning_rate, num_classes, *args, **kwargs):
         super().__init__()
         self.num_classes = num_classes
@@ -25,8 +46,10 @@ class POMv1(pl.LightningModule):
 
         self.setup_projection()
 
-        self.om_encoder = UNetEncoder(3, 16)
-        self.om_decoder = UNetDecoder(3, 16)
+        self.om_encoder = UNetEncoder(3, 64)
+        self.om_decoder = UNetDecoder(3, 128)
+
+        self.pon = PON_mod(learning_rate, num_classes)
 
         self.learning_rate = learning_rate
 
@@ -93,12 +116,20 @@ class POMv1(pl.LightningModule):
             self.eval_bev_logger = logging.get_genout_logger(self.logger.experiment)
 
     def forward(self, x):
+        pon_bev_fts, pon_bev_filter = self.pon(x)
+
         x = self.sem_pom_model_transforms(x)
         y_hat = self.sem_pom_model(x)['out']
         pom_hat = self.sem_pom_output_transform(y_hat)
 
         proj_bev = self.project_to_bev(F.softmax(pom_hat, dim=1))
-        bev_hat = self.om_decoder(self.om_encoder(proj_bev))
+        proj_bev_fts = self.om_encoder(proj_bev)
+
+        combined_bev_fts = {}
+        for k in proj_bev_fts.keys():
+            combined_bev_fts[k] = torch.cat([proj_bev_fts[k], pon_bev_fts[k]], dim=1)
+
+        bev_hat = self.om_decoder(combined_bev_fts)
 
         return pom_hat, bev_hat
 
@@ -107,7 +138,8 @@ class POMv1(pl.LightningModule):
         pom_hat, bev_hat = self(rgb)
 
         bev = bev[:,:,64:,32:96]
-        loss = F.cross_entropy(pom_hat, pom) + F.cross_entropy(bev_hat, bev)
+        # loss = F.cross_entropy(pom_hat, pom) + F.cross_entropy(bev_hat, bev)
+        loss = dice_loss(bev_hat, torch.argmax(bev, dim=1)) + dice_loss(pom_hat, torch.argmax(pom, dim=1))
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -122,8 +154,12 @@ class POMv1(pl.LightningModule):
         pom_hat, bev_hat = self(rgb)
         bev = bev[:,:,64:,32:96]
 
-        loss_pom = F.cross_entropy(pom_hat, pom)
-        loss_bev = F.cross_entropy(bev_hat, bev)
+        # loss_pom = F.cross_entropy(pom_hat, pom)
+        # loss_bev = F.cross_entropy(bev_hat, bev)
+        # loss = loss_pom + loss_bev
+
+        loss_pom = dice_loss(pom_hat, torch.argmax(pom, dim=1))
+        loss_bev = dice_loss(bev_hat, torch.argmax(bev, dim=1))
         loss = loss_pom + loss_bev
 
         self.log(f"{stage}_loss", loss, sync_dist=True)
@@ -171,15 +207,17 @@ class POMv1(pl.LightningModule):
 
     def configure_optimizers(self):
         opt = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        shd = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=0.1, patience=5, threshold_mode='rel', threshold=1e-2)
+        shd = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=0.1, patience=10, threshold_mode='rel', threshold=1e-3)
 
         return {'optimizer':opt, 'lr_scheduler':shd, 'monitor': 'val_loss'}
 
 
 if __name__ == "__main__":
-    model = POMv1(learning_rate=1e-3, num_classes=3)
+    model = POMv2(learning_rate=1e-3, num_classes=3)
 
     input_rgb = torch.rand((4, 3, 512, 512))
     pom = F.softmax(torch.rand((4, 3, 128, 128)), dim=1)
     bev = F.softmax(torch.rand((4, 3, 128, 128)), dim=1)
-    model.training_step((input_rgb, None, pom, bev, None), 0)
+    
+    loss = model.training_step((input_rgb, None, pom, bev, None), 0)
+    print(loss)

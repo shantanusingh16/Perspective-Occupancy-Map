@@ -1,52 +1,14 @@
-from math import ceil
-from turtle import forward
 import numpy as np
 import torch
 import torch.nn as nn
-from models.multihead_attention import MultiheadAttention
-from models.feedforward import FeedForward
-from models.resnet_encoder import ResnetEncoder
-from models.encoder_decoder import Conv3x3, double_conv, up
+from models.encoder_decoder import double_conv, FPN
 import pytorch_lightning as pl
 import torch.nn.functional as F
 import torchmetrics
 from utils import logging
 
 
-#################################### FPN Block ########################################
-
-class FPN(nn.Module):
-    def __init__(self) -> None:
-        super(FPN, self).__init__()
-        self.encoder_base = ResnetEncoder(18, True)
-        self.num_ch_enc = self.encoder_base.num_ch_enc
-
-        # convolution to reduce depth and size of features before fc
-        self.conv1 = Conv3x3(self.num_ch_enc[-1], 512)
-        self.conv2 = Conv3x3(512, 512)
-        self.pool = nn.MaxPool2d(2)
-
-        self.up1 = up(1024, 512)
-        self.up2 = up(1024, 512)
-        self.up3 = up(768, 256)
-        self.up4 = up(384, 128)
-
-        self.scales = [8, 16, 32, 64, 128]
-        self.num_channels = [128, 256, 512, 512, 512]
-
-    def forward(self, x):
-        x0, x1, x2, x3, x4 = self.encoder_base(x)
-        x5 = self.pool(self.conv1(x4))
-        x6 = self.pool(self.conv2(x5))
-
-        y6 = x6
-        y5 = self.up1(y6, x5)
-        y4 = self.up2(y5, x4)
-        y3 = self.up3(y4, x3)
-        y2 = self.up4(y3, x2)
-
-        return [y2, y3, y4, y5, y6]
-
+#################################### DenseTransformer Block ########################################
 
 class DenseTransformer(nn.Module):
     def __init__(self, C, H, W, Z, bottleneck=128, out_ch=64) -> None:

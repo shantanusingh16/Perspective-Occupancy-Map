@@ -5,14 +5,14 @@ data_dir: '/scratch/shantanu/gibson4/new'
 split_dir: 'splits/gibson4'
 log_dir: '/scratch/shantanu/indolayout/logs'
 weight_dir: '/scratch/shantanu/indolayout/weights'
-learning_rate: 1e-4
+learning_rate: 1e-5
 batch_size: 16
 num_workers: 8
-num_epochs: 100
+num_epochs: 50
 
 model_hparams:
-  nblocks: 2
-  nheads: 4
-  head_dim: 32
-  ff_skipcon: True
-  dropout: 0.3
+  nblocks: 4
+  nheads: 2
+  head_dim: 128
+  ff_skipcon: False
+  dropout: 0.5

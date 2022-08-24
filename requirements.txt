@@ -2,3 +2,4 @@ cprint
 yacsc
 pyfakefs==4.6.3
 Pillow-SIMD==9.0.0.post1
+torchgeometry==0.1.2

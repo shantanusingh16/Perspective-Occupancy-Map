@@ -3,16 +3,19 @@ from models.amodal_bev import AmodalBev
 from models.monolayout import Monolayout
 from models.deeplabv3 import DeepLabv3
 from models.indolayout import Indolayout
-from models.pomv1 import POMv1
+from models.pom import POMv1, POMv2
 from models.pon import PON
+from models.tim import TIM
 
 model_classes = {
     'monolayout': Monolayout,
     'deeplabv3': DeepLabv3,
     'indolayout': Indolayout,
     'amodalbev': AmodalBev,
+    'pon': PON,
+    'tim': TIM,
     'pomv1': POMv1,
-    'pon': PON
+    'pomv2': POMv2
 }
 
 def make_model(cfg) -> LightningModule:
