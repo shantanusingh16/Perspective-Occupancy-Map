@@ -1,0 +1,13 @@
+experiment_name: 'train_pomv1_gibson4'
+model_type: 'pomv1'
+data_dir: '/scratch/shantanu/gibson4/new'
+split_dir: 'splits/gibson4'
+log_dir: '/scratch/shantanu/perspective_occupancy_map/logs'
+weight_dir: '/scratch/shantanu/perspective_occupancy_map/weights'
+learning_rate: 1e-4
+batch_size: 16
+num_workers: 8
+num_epochs: 50
+
+model_hparams:
+  num_classes: 3

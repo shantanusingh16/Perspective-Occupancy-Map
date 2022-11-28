@@ -4,41 +4,40 @@ from yacs.config import CfgNode as CN
 
 _C = CN()
 
-_C.name = 'perspective_occupancy_map'
+# Project level configuration
+_C.project_name = 'perspective_occupancy_map'
+
 
 # Log configuration
-_C.log_dir = '/tmp/perspective_occupancy_map/'
+_C.experiment_name = ""
+_C.log_dir = '/tmp/perspective_occupancy_map/logs'
+_C.weight_dir = '/tmp/perspective_occupancy_map/weights'
 _C.log_frequency = 250
-_C.model_name = None
+_C.model_type = None
 _C.save_frequency = 1
+_C.log_model_checkpoint = True  # For wandb
 _C.script_mode = 'train'  # train, eval, predict
 
 # Dataset configuration
-_C.dataset = 'habitat'
-_C.data_path = ''
+_C.dataset = 'gibson4'
+_C.data_dir = ''
+_C.split_dir = ''
 _C.width = 128
 _C.height = 128
 
-# Additional datakeys
-_C.color_dir = None
-_C.depth_dir = None
-_C.bev_dir = None
-
 # Model configuration
-_C.load_weights_folder = None
+_C.load_ckpt_path = None
+_C.model_hparams = CN(new_allowed=True)   # To allow model specific params
 
 # Training hyperparameters
 _C.no_cuda = False
 _C.batch_size = 4
 _C.num_epochs = 100
-_C.train_workers = 4
-_C.val_workers = 4
+_C.num_workers = 4
 _C.learning_rate = 1e-4
 _C.scheduler_step_size = 15
 _C.seed = 0
 
-_C.loss_weights = CN(new_allowed=False)
-_C.loss_weights.rgb_loss = 0.0
 
 def get_cfg_defaults():
   """Get a yacs CfgNode object with default values for my_project."""

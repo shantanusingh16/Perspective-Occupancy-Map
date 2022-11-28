@@ -14,18 +14,25 @@ class DataConfig(object):
             'scene4 cam4 4',
             'scene5 cam5 5',
         ]
-        self.test_files = [
+        self.val_files = [
             'scene6 cam6 6',
             'scene7 cam7 7',
             'scene8 cam8 8'
+        ]
+        self.test_files = [
+            'scene9 cam9 9',
+            'scene10 cam10 10',
+            'scene11 cam11 11',
+            'scene12 cam12 12'
         ]
 
         self.fname_metadata_map = {
             'RGB': ('.jpg', (1024, 1024, 3), 255), 
             'DEPTH': ('.png', (1024, 1024), 65535),
-            'semantics': ('.png', (1024, 1024), 258),
-            'pom': ('.png', (128, 128), 132),
+            'semantics': ('.png', (1024, 1024), 150),
+            'pom': ('.png', (128, 128), 150),
             'partial_occ': ('.png', (128, 128), 255),
+            'proj_bev': ('.png', (64, 64), 255)
         }
 
         for fname, (ext, img_dim, img_range) in self.fname_metadata_map.items():
@@ -40,6 +47,9 @@ class DataConfig(object):
 
         self.fs.create_file(os.path.join(self.split_dir, 'train.txt'), \
             contents='\n'.join(self.train_files))
+        
+        self.fs.create_file(os.path.join(self.split_dir, 'val.txt'), \
+            contents='\n'.join(self.val_files))
         
         self.fs.create_file(os.path.join(self.split_dir, 'test.txt'), \
             contents='\n'.join(self.test_files))
