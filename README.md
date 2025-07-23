@@ -36,6 +36,14 @@ POMv2 consists of a two-branch architecture designed to jointly predict semantic
 
 - **Cross-Dataset Transfer:** The POM head can be pretrained on large-scale segmentation datasets (e.g., Cityscapes), enabling the model to leverage diverse real-world data and generalize better to new environments.
 
+## Architecture
+
+The architecture contains:
+- A **DeepLabV3** model for semantic POM prediction.
+- A **PON_mod** encoder that extracts spatial features from the perspective view.
+- A **BEV projection module** that maps semantic logits into a top-view grid using calibrated camera geometry.
+- A **UNet-style decoder** that predicts top-down segmentation maps.
+
 ## Project Structure
 
 ```
@@ -75,17 +83,16 @@ To run evaluation on a trained checkpoint:
 python eval.py --config configs/your_config.yaml --ckpt path/to/checkpoint.ckpt
 ```
 
-## Results
-TBA
+## Results (TBA)
+| Dataset            | Segmentation Objects | mIOU(%) | mAP(%)| Pretrained Model                                                                                                       | 
+| :--------:           | :-----:     | :----:   | :----: | :----:                                                                                                                 |
+| KITTI 3D Object     | Vehicle    |  -  | - | - |
+| KITTI Odometry     | Road     |  -  | - | - |
+| KITTI Raw          | Road     |  -  | - | - |
+| Argoverse Tracking | Vehicle    |  -  | - | - |
+| Argoverse Tracking | Road    |  -  | - | - |
 
 
-## Architecture
-
-The architecture contains:
-- A **DeepLabV3** model for semantic POM prediction.
-- A **PON_mod** encoder that extracts spatial features from the perspective view.
-- A **BEV projection module** that maps semantic logits into a top-view grid using calibrated camera geometry.
-- A **UNet-style decoder** that predicts top-down segmentation maps.
 
 ## License
 
@@ -93,4 +100,16 @@ This project is licensed under the MIT License. See LICENSE for details.
 
 ## Citation
 
-If you use this project in your research, please cite the original authors.
+If you use this project in your research, please cite us.
+
+```bibtex
+@software{Singh_Perspective_Occupancy_Map_2022,
+author = {Singh, Shantanu},
+doi = {10.5281/zenodo.16370976},
+month = aug,
+title = {{Perspective Occupancy Map (POM)}},
+url = {https://github.com/shantanusingh16/Perspective-Occupancy-Map},
+version = {1.0.0},
+year = {2022}
+}
+```
